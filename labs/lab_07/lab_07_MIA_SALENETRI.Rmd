@@ -81,9 +81,9 @@ We're also going to load two new packages: [mapview](https://r-spatial.github.io
 ```{r}
 
 # Load Tidyverse, janitor and arcos, tidycensus, mapview, ggthemes, scales
-install.packages("mapview")
-install.packages("ggthemes")
-install.packages("tidycensus")
+#install.packages("mapview")
+#install.packages("ggthemes")
+#install.packages("tidycensus")
 
 ```
 ```{r}
@@ -100,7 +100,7 @@ library(ggplot2)
 ```
 
 ```{r}
-install.packages("tidycensus")
+#install.packages("tidycensus")
 
 library(tidycensus)
 ```
@@ -442,7 +442,7 @@ geo_pills_population_state %>%
   facet_wrap(~year, nrow=2) +
   geom_sf(lwd = 0) +
   theme_map() +
-  labs(fill='Pills per Person',title="", subtitle = "", caption = "Source: ARCOS database") +
+  labs(fill='Pills per Person',title="Data shows an increase of pills per person in some states from 2006 to 2012", subtitle = "Many states hit the hardest are in the southeastern United States, particularly in Appalachia", caption = "Source: ARCOS database") +
   theme(legend.position="bottom") +
   scale_fill_viridis_c(option = "magma",labels = comma)
 
@@ -452,7 +452,9 @@ geo_pills_population_state %>%
 
 ```{r}
 
-# Map Code Here
+mapview(geo_pills_population_state_2009, zcol = "pills_per_person", legend = TRUE)
+
+#Aside from the large amount of pills in Appalachia, I've noticed that north-midwestern states like North and South Dakota had pretty low rates of pills per person in 2009. Also, many western states (with a notable difference being Nevada) seem to have pretty median rates of pills per person relative to the rest of the country.
 
 ```
 
@@ -460,9 +462,36 @@ geo_pills_population_state %>%
 
 
 ```{r}
-# map code here
+maryland_pills_population_county <- pills_population %>%
+  filter(statefips == "24") %>%
+  group_by(countyfips, buyer_county, year) %>%
+  summarise(total_pills=sum(dosage_unit, na.rm = TRUE),
+            total_population=sum(population, na.rm=TRUE)) %>%
+  mutate(pills_per_person=total_pills/total_population)
 
 ```
+
+```{r}
+#joining md pills pop w geoid
+
+maryland_pills_population_county <- county_geodata_shifted %>%
+ inner_join(maryland_pills_population_county, by=c("GEOID" = "countyfips"))
+
+```
+
+```{r}
+
+maryland_pills_population_county %>%
+  ggplot(aes(fill = pills_per_person)) +
+  facet_wrap(~year, nrow=2) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='Pills per Person',title="Allegany, Cecil, Kent counties saw peak opioid pills in 2011 ", subtitle = "All three counties saw a slow increase of pill shipments between 2006 and 2011. \nBy 2012, the numbers began to dwindle, but Kent and Allegany still held the top spots.", caption = "Source: ARCOS database") +
+  theme(legend.position="bottom") +
+  scale_fill_viridis_c(option = "magma",labels = comma)
+
+```
+
 
 ## Submission
 
