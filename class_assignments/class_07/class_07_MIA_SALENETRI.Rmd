@@ -59,6 +59,12 @@ We're loading four packages today: the Tidyverse (for general data science goodn
 We're also going to load a new package, [tidycensus](https://walkerke.github.io/tidycensus/index.html), for pulling in data from the U.S. Census.  
 
 **Task**: In the code block below, load the six packages we'll need for today. Install packages if necessary. 
+
+```{r}
+
+#install.packages("tidycensus")
+```
+
 ```{r}
 
 library(tidyverse)
@@ -66,7 +72,7 @@ library(janitor)
 library(arcos)
 library(scales)
 library(ggrepel)
-library(tidycensus)
+#library(tidycensus)
 
 ```
 
@@ -108,6 +114,25 @@ arcos_county_pills_per_year <- summarized_county_annual(key = key) %>%
 
 You should also write up a few sentences explaining the trend in a bit more detail.
 
+```{r}
+logan_pills_per_year <- arcos_county_pills_per_year %>%
+  filter(buyer_county == "LOGAN", buyer_state == "WV") %>%
+  select(buyer_county, year, dosage_unit)
+```
+
+```{r}
+#yearly pill totals in logan county
+ggplot(logan_pills_per_year) +
+  geom_bar(stat="identity", aes(year, dosage_unit, fill=buyer_county), fill="forest green") +
+  labs(x="Year", y="Total pills", title="Steady flow of opioids in Logan County", subtitle = "Total pills per year shipped to Logan County, West Virginia \nshow very little variation from year to year", caption = "Source: DEA ARCOS database, via Washington Post", fill="County") +
+  scale_x_continuous(breaks = c(2006, 2007, 2008, 2009, 2010, 2011, 2012)) +
+  scale_y_continuous(labels = comma) +
+  facet_wrap(nrow=2, . ~ buyer_county) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
 **Task**: Build an exploratory visualization to show how year-over-year pill totals in Logan County, West Virginia between 2006 and 2012 compare to five other West Virginia counties with high levels of opioid shipments. It should have the following attributes:
   * Chart Type: six "small multiple" bar charts, arranged in a 3 x 2 grid.  There should be one bar chart per county. 
   * Counties: one chart per county for the following counties: Kanawha, Cabell, Mingo, Raleigh, Logan and Wood.
@@ -115,6 +140,25 @@ You should also write up a few sentences explaining the trend in a bit more deta
   * Text: put a descriptive title, subtitle and source line.  The title should describe the main takeaway.
   
 You should also write up a few sentences explaining the trends in a bit more detail.
+
+```{r}
+WV_pills_per_year <- arcos_county_pills_per_year %>%
+  filter(buyer_state == "WV", (buyer_county %in% c("KANAWHA", "CABELL", "MINGO", "RALEIGH","LOGAN", "WOOD"))) %>%
+  select(buyer_county, year, dosage_unit)
+```
+
+```{r}
+
+ggplot(WV_pills_per_year) +
+  geom_bar(stat="identity", aes(year, dosage_unit, fill=buyer_county)) +
+  labs(x="Year", y="Total pills", title="Some West Virginia counties saw greater opioid increases than others", subtitle = "Some West Virginia counties saw steady increases in the supply \nof opioid pills while some saw spikes in 2008 and 2009", caption = "Source: DEA ARCOS database, via Washington Post", fill="County") +
+  scale_x_continuous(breaks = c(2006, 2007, 2008, 2009, 2010, 2011, 2012)) +
+  scale_y_continuous(labels = comma) +
+  facet_wrap(nrow=2, . ~ buyer_county) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  guides(fill="none")
+
+```
 
 **Task (This one is more challenging)**: Build a scatterplot that explores the relationship between the following two factors for Maryland counties: the pills per person rate (not total pills, but pills per person) for a county in 2012 and the county's median household income in 2012.  
 
@@ -134,19 +178,19 @@ Here's the code you'll need to pull it in.
 
 # Define census api key.  I'm including mine here.  You may need to get your own. https://api.census.gov/data/key_signup.html
 
-census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
+#census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
 
 # Store a table with the median household income value for each county using the get_acs() function.  ACS is short for American Community Survey, one of two main census products. In the table that's loaded in, the :estimate" is the median household income for that county, averaged over 5 years ending in 2012. 
 
-county_median_household_income <- get_acs(geography = "county", variables = c("B19013_001"), survey="acs5", year = 2012)
+#county_median_household_income <- get_acs(geography = "county", variables = c("B19013_001"), survey="acs5", year = 2012)
 
 # How did I get the variables?  I pulled in a table from the tidycensus package that lists all of the thousands of variables available through the census.  Load the table below and view it.  Use filters in the R Viewer window to find things you might want to use later. You can also find table and variable numbers at https://data.census.gov/cedsci/.
 
-acs_variables <- load_variables(2012, "acs5", cache = TRUE)
+#acs_variables <- load_variables(2012, "acs5", cache = TRUE)
 
 # Filter just for Maryland counties
-md_county_median_household_income <- county_median_household_income %>%
-  filter(str_detect(NAME, ", Maryland"))
+#md_county_median_household_income <- county_median_household_income %>%
+#  filter(str_detect(NAME, ", Maryland"))
 
 
 ```
