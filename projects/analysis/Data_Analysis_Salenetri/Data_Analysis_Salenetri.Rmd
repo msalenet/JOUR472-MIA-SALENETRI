@@ -37,16 +37,11 @@ options(scipen = 0)
 
 ```{r}
 ARCOSkey <- "uO4EK6I"
-arcos_county_pills_per_year <- summarized_county_annual(key = ARCOSkey) %>%
-  clean_names()
-arcos_county_totals <- arcos_county_pills_per_year %>%
-  group_by(countyfips) %>%
-  summarise(sum(dosage_unit))
 ```
 
-Because I'm having trouble working on the actual coding aspects, I'm going to start by writing out what I intend to do once I have the tools I need to start my analysis.
+Because I'm having trouble working on some of the actual coding aspects, I'm going to start by writing out what I intend to do once I have the tools I need to start my analysis.
 
-Using the nine rural/urban population groups determined by the USDA, I want to determine whether different demographic groups are affected differently by metro area size.
+Using the nine rural/urban population groups determined by the USDA, I want to determine whether different demographic groups are affected differently based on the size of a metro area.
 
 First, I want to import the datasets I'll need:
  - ARCOS pills per person per county 
@@ -73,10 +68,6 @@ Before I do much analysis with the UDSA data, I want to create a color-coded map
 #metro area map
 ```
 
-I need to combine/condense the data I have from the USDA so I only have nine rows, one for each catrgory of metro area size. In that dataset, I want to see the average county population by category. 
-```{r}
-#condense USDA data by metro size grouping and average populations
-```
 
 Instead of working with the differences by year, I want to just use the averages across 2006-12. This means I'll need to alter the ARCOS dataset to show the average amount of pills per person from 2006-12 and the total opioid deaths from 2006-12 by county. Before I've done any work I've noticed that a lot of inputs for "deaths" in opioid_deaths_06_12 are "suppressed." I'm not sure what this means but I assume that I won't have death data for every county. In the end though, I think this won't be an issue as I can use the trends from the counties I do have data for to make an educated guess/inference about that size of metro center.
 ```{r}
@@ -118,14 +109,12 @@ Now, join the census demographic dataset and the USDA population/metro size data
 
 While I won't be able to open it on my personal computer, I want to have a massive dataset that is a combination of all the data I could ever need
 ```{r}
-#start with ARCOS totals by county (county, state, fips, dosage unit)
+#start with ARCOS pill totals by county (county, state, fips, dosage unit) 
+#then add the demographics for each county (race/ethnicity and median income)
+#then add populations and RU codes for each county
+#then add optoid deaths for each county
 ```
 
-I think I want to have different datsets for each population group. That way, I can do some analysis on a smaller scale.
-```{r}
-#split USDA dataset into nine smaller ones by RUCC_2013
-#join each one to census, arcos
-```
 
 
 
