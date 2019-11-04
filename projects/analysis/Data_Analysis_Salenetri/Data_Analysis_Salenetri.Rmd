@@ -32,10 +32,16 @@ library(janitor)
 library(scales)
 library(ggrepel)
 library(dplyr)
+options(scipen = 0)
 ```
 
 ```{r}
 ARCOSkey <- "uO4EK6I"
+arcos_county_pills_per_year <- summarized_county_annual(key = ARCOSkey) %>%
+  clean_names()
+arcos_county_totals <- arcos_county_pills_per_year %>%
+  group_by(countyfips) %>%
+  summarise(sum(dosage_unit))
 ```
 
 Because I'm having trouble working on the actual coding aspects, I'm going to start by writing out what I intend to do once I have the tools I need to start my analysis.
@@ -74,17 +80,52 @@ I need to combine/condense the data I have from the USDA so I only have nine row
 
 Instead of working with the differences by year, I want to just use the averages across 2006-12. This means I'll need to alter the ARCOS dataset to show the average amount of pills per person from 2006-12 and the total opioid deaths from 2006-12 by county. Before I've done any work I've noticed that a lot of inputs for "deaths" in opioid_deaths_06_12 are "suppressed." I'm not sure what this means but I assume that I won't have death data for every county. In the end though, I think this won't be an issue as I can use the trends from the counties I do have data for to make an educated guess/inference about that size of metro center.
 ```{r}
-#average pills per person per county from 2006-2012
-#total deaths by county from 2006-2012
+#total number of pills from 2006-2012 categorized by the countyfips code:
+arcos_county_pills_per_year <- summarized_county_annual(key = ARCOSkey) %>%
+  clean_names()
+arcos_county_totals <- arcos_county_pills_per_year %>%
+  group_by(countyfips) %>%
+  mutate(Total_pills =sum(dosage_unit)) %>%
+  summarise(Total_pills = sum(Total_pills))
+
+#total deaths by county from 2006-2012:
 ```
 
-One of the first joins I want to do it between the census demographic dataset and the USDA population/metro size dataset. Instead of looking at the racial makeup and socioeconomic class for each county, I want to use the median incomes and racial makeups by size of metro area. For example, I want to say that the median household income for a county in a nonmetro area with an urban population of 20,000 or more is X. 
+Join the newly simplified arcos_county_totals with the ruralurbancodes2013 into new rural_urban_working. It will now contain the countyfips, state, county name, population, urban group and pill totals.
+```{r}
+#changing column names and removing unnecessary columns
+rural_urban_working <- ruralurbancodes2013 %>%
+  mutate(countyfips = FIPS) %>%
+  select(-FIPS) %>%
+  select(-Description) %>%
+  select(-X7) %>%
+  select(-X8) 
+
+#joining the two tables 
+rural_urban_working <- rural_urban_working %>%
+  inner_join(arcos_county_totals, by = NULL, copy = FALSE)
+
+#adding pills per person column
+rural_urban_working <- rural_urban_working %>%
+  mutate(Pills_per_person = Total_pills / Population_2010 )
+
+```
+
+Now, join the census demographic dataset and the USDA population/metro size dataset. Instead of looking at the racial makeup and socioeconomic class for each county, I want to use the median incomes and racial makeups by size of metro area. For example, I want to say that the median household income for a county in a nonmetro area with an urban population of 20,000 or more is X. 
 ```{r}
 #join census demographics with USDA population and metro area group
 ```
 
+While I won't be able to open it on my personal computer, I want to have a massive dataset that is a combination of all the data I could ever need
+```{r}
+#start with ARCOS totals by county (county, state, fips, dosage unit)
+```
 
-
+I think I want to have different datsets for each population group. That way, I can do some analysis on a smaller scale.
+```{r}
+#split USDA dataset into nine smaller ones by RUCC_2013
+#join each one to census, arcos
+```
 
 
 
