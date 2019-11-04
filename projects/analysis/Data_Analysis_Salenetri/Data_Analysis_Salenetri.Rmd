@@ -22,7 +22,6 @@ install.packages("tidyverse")
 install.packages("janitor")
 install.packages("scales")
 install.packages("ggrepel")
-
 ```
 
 ```{r}
@@ -37,49 +36,55 @@ library(dplyr)
 
 ```{r}
 ARCOSkey <- "uO4EK6I"
-
-arcos_county_pills_per_year <- summarized_county_annual(key = ARCOSkey) %>%
-  clean_names()
 ```
 
+Because I'm having trouble working on the actual coding aspects, I'm going to start by writing out what I intend to do once I have the tools I need to start my analysis.
+
+Using the nine rural/urban population groups determined by the USDA, I want to determine whether different demographic groups are affected differently by metro area size.
+
+First, I want to import the datasets I'll need:
+ - ARCOS pills per person per county 
+ - the USDA rural urban county codes and populations (done)
+ - the opioid death rates by county (done)
+ - Census demographic data by county for race/ethnicity and economic class (waiting for API key)
+ 
 ```{r}
-
+#set CENSUSkey
+#load census data
+#load county geometric data (load shapefiles, lab 7)
 ```
-
+ 
+I'll need to normalize all the datasets so they are easier to join together. Many of them are formatted differently and I'll likely have to do a lot of mutations to make them easier to handle.
+For example, I'll need to make sure that I split up the FIPS codes so there's a column for state_FIPS and county_FIPS. I also want to make sure every dataset has two separate columns for state and county. Some datasets have the word "county" in the county column, so I'll need to find a way to remove the word "county." 
 ```{r}
-
+#split fips
+#remove the word county
+#normalize into all caps? probably
 ```
 
+Before I do much analysis with the UDSA data, I want to create a color-coded map that visualizes the sizes of metro areas.
 ```{r}
-
+#metro area map
 ```
 
+I need to combine/condense the data I have from the USDA so I only have nine rows, one for each catrgory of metro area size. In that dataset, I want to see the average county population by category. 
 ```{r}
-
+#condense USDA data by metro size grouping and average populations
 ```
 
+Instead of working with the differences by year, I want to just use the averages across 2006-12. This means I'll need to alter the ARCOS dataset to show the average amount of pills per person from 2006-12 and the total opioid deaths from 2006-12 by county. Before I've done any work I've noticed that a lot of inputs for "deaths" in opioid_deaths_06_12 are "suppressed." I'm not sure what this means but I assume that I won't have death data for every county. In the end though, I think this won't be an issue as I can use the trends from the counties I do have data for to make an educated guess/inference about that size of metro center.
 ```{r}
-
+#average pills per person per county from 2006-2012
+#total deaths by county from 2006-2012
 ```
 
+One of the first joins I want to do it between the census demographic dataset and the USDA population/metro size dataset. Instead of looking at the racial makeup and socioeconomic class for each county, I want to use the median incomes and racial makeups by size of metro area. For example, I want to say that the median household income for a county in a nonmetro area with an urban population of 20,000 or more is X. 
 ```{r}
-
+#join census demographics with USDA population and metro area group
 ```
 
-```{r}
 
-```
 
-```{r}
 
-```
 
-## Including Plots
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
