@@ -11,14 +11,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-
 ```{r}
-install.packages("tidycensus")
-install.packages("arcos")
-install.packages("tidyverse")
-install.packages("janitor")
-install.packages("scales")
-install.packages("ggrepel")
+#install.packages("tidycensus")
+#install.packages("arcos")
+#install.packages("tidyverse")
+#install.packages("janitor")
+#install.packages("scales")
+#install.packages("ggrepel")
 ```
 
 ```{r}
@@ -30,6 +29,15 @@ library(scales)
 library(ggrepel)
 library(dplyr)
 options(scipen = 0)
+library(ggplot2)
+```
+
+```{r}
+
+opioid_deaths_06_12 <- read_tsv("opioid_deaths_06_12.txt")
+
+ruralurbancodes2013 <- read_csv("ruralurbancodes2013.csv")
+
 ```
 
 ```{r}
@@ -44,33 +52,40 @@ First, I want to import the datasets I'll need:
  - ARCOS pills per person per county 
  - the USDA rural urban county codes and populations (done)
  - the opioid death rates by county (done)
- - Census demographic data by county for race/ethnicity and economic class (waiting for API key)
+ - Census demographic data by county for race/ethnicity and economic class 
  
 ```{r}
 #set CENSUSkey
+CENSUSkey <-"549950d36c22ff16455fe196bbbd01d63cfbe6cf"
+
+acs_variables <- load_variables(2017, "acs5", cache = FALSE)
+
 #load census data
-#load county geometric data (load shapefiles, lab 7)
-```
- 
-I'll need to normalize all the datasets so they are easier to join together. Many of them are formatted differently and I'll likely have to do a lot of mutations to make them easier to handle.
-For example, I'll need to make sure that I split up the FIPS codes so there's a column for state_FIPS and county_FIPS. I also want to make sure every dataset has two separate columns for state and county. Some datasets have the word "county" in the county column, so I'll need to find a way to remove the word "county." 
-```{r}
-#split fips
-#remove the word county
-#normalize into all caps? probably
-```
+county_geodata <- get_acs(geography = "county",
+              variables = "B01001_001", geometry = TRUE)
 
-Before I do much analysis with the UDSA data, I want to create a color-coded map that visualizes the sizes of metro areas.
-```{r}
-#metro area map
-```
+county_geodata_shifted <- get_acs(geography = "county",
+              variables = "B01001_001", geometry = TRUE, shift_geo = TRUE)
 
+state_geodata <- get_acs(geography = "state",
+              variables = "B01001_001", geometry = TRUE)
+
+state_geodata_shifted <- get_acs(geography = "state",
+              variables = "B01001_001", geometry = TRUE, shift_geo = TRUE)
+
+median_income <- get_acs(geography = "county",
+              variables = "B25099_001", geometry = TRUE, shift_geo = TRUE)
+
+race_by_county <- get_acs(geography = "county",
+              variables = "B02001_001", geometry = TRUE, shift_geo = TRUE)
+```
 
 Instead of working with the differences by year, I want to just use the averages across 2006-12. This means I'll need to alter the ARCOS dataset to show the average amount of pills per person from 2006-12 and the total opioid deaths from 2006-12 by county. Before I've done any work I've noticed that a lot of inputs for "deaths" in opioid_deaths_06_12 are "suppressed." I'm not sure what this means but I assume that I won't have death data for every county. In the end though, I think this won't be an issue as I can use the trends from the counties I do have data for to make an educated guess/inference about that size of metro center.
 ```{r}
 #total number of pills from 2006-2012 categorized by the countyfips code:
 arcos_county_pills_per_year <- summarized_county_annual(key = ARCOSkey) %>%
   clean_names()
+
 arcos_county_totals <- arcos_county_pills_per_year %>%
   group_by(countyfips) %>%
   mutate(Total_pills =sum(dosage_unit)) %>%
@@ -100,19 +115,96 @@ rural_urban_working <- rural_urban_working %>%
 
 ```
 
+I want to attempt to condense the rural_urban_working data and get summaries for the entire group of nine
+```{r}
+rural_urban_condensed <- rural_urban_working %>%
+  group_by(RUCC_2013) %>%
+  mutate(Total_pills =sum(Total_pills))  %>%
+  mutate(Total_population =sum(Population_2010)) %>%
+  select(-Population_2010) %>% 
+  select(-Pills_per_person) 
+
+```
+
 Now, join the census demographic dataset and the USDA population/metro size dataset. Instead of looking at the racial makeup and socioeconomic class for each county, I want to use the median incomes and racial makeups by size of metro area. For example, I want to say that the median household income for a county in a nonmetro area with an urban population of 20,000 or more is X. 
 ```{r}
+
 #join census demographics with USDA population and metro area group
 ```
 
 While I won't be able to open it on my personal computer, I want to have a massive dataset that is a combination of all the data I could ever need
 ```{r}
-#start with ARCOS pill totals by county (county, state, fips, dosage unit) 
+#combine arcos data with USDA (county, state, fips, population, pills/person, rural/urban rank) 
+big_data <- rural_urban_working %>%
+  group_by(countyfips) %>%
+  select(-Total_pills)
+  
+
 #then add the demographics for each county (race/ethnicity and median income)
-#then add populations and RU codes for each county
 #then add optoid deaths for each county
 ```
 
+Before I do much analysis with the UDSA data, I want to create a color-coded map that visualizes the sizes of metro areas.
+```{r}
+#create new dataset for usda group map
+rural_urban_geo <- county_geodata_shifted %>%
+  mutate(countyfips = GEOID) 
+
+#joining with grouping
+rural_urban_geo <- rural_urban_geo %>%
+  inner_join(rural_urban_working, by = NULL, copy = FALSE)
+
+```
+
+```{r}
+#making the MAP itself
+rural_urban_geo %>%
+  ggplot(aes(fill = RUCC_2013)) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='Rural to Urban',title="Rural and urban area classifications", subtitle = "USDA, 2013", caption = "Source: USDA") +
+  theme(legend.position="right") +
+  scale_fill_viridis_c(option = "plasma",labels = comma)
+
+```
+ 
+```{r}
+#MAP based on pills per person
+rural_urban_geo %>%
+  ggplot(aes(fill = Pills_per_person)) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='PIlls per person',title="Pills per person by US county", subtitle = "", caption = "Source: ARCOS") +
+  theme(legend.position="right") +
+  scale_fill_viridis_c(option = "plasma",labels = comma)
+
+```
+ 
+Make a BAR CHART visualizing pills per person versus urban/rural group.
+```{r}
+#New rural urban with description
+rural_urban_desc <- ruralurbancodes2013 %>%
+  mutate(countyfips = FIPS) %>%
+  select(-FIPS) %>%
+  select(-X7) %>%
+  select(-X8) 
+rural_urban_desc <- rural_urban_desc %>%
+  inner_join(arcos_county_totals, by = NULL, copy = FALSE)
+rural_urban_desc <- rural_urban_desc %>%
+  mutate(Pills_per_person = Total_pills / Population_2010 )
+
+#chart, comparing urbanness/ruralness to pills per person
+ggplot(rural_urban_desc) +
+  geom_bar(stat="identity", aes(RUCC_2013, Pills_per_person), fill="pink") +
+  labs(x="Size of metro area (most urban to most rural)", y="Pills per person", title="title", subtitle = "subtitle", caption = "caption/source") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_y_continuous(labels = comma)+
+  theme_classic()+
+  scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9))
+
+```
+
+Based on what we see here, I want to look closer at the groups marked 6 and 7. Why do they have so much higher rates of pills/person?
 
 
 
