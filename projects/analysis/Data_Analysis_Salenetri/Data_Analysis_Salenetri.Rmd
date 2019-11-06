@@ -27,6 +27,7 @@ library(arcos)
 library(janitor)
 library(scales)
 library(ggrepel)
+library(ggthemes)
 library(dplyr)
 options(scipen = 0)
 library(ggplot2)
@@ -56,7 +57,7 @@ First, I want to import the datasets I'll need:
  
 ```{r}
 #set CENSUSkey
-CENSUSkey <-"549950d36c22ff16455fe196bbbd01d63cfbe6cf"
+census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
 
 acs_variables <- load_variables(2017, "acs5", cache = FALSE)
 
@@ -88,11 +89,10 @@ arcos_county_pills_per_year <- summarized_county_annual(key = ARCOSkey) %>%
 
 arcos_county_totals <- arcos_county_pills_per_year %>%
   group_by(countyfips) %>%
-  mutate(Total_pills =sum(dosage_unit)) %>%
-  summarise(Total_pills = sum(Total_pills))
+  summarise(avg_pills_year = mean(dosage_unit))
 
 #total deaths by county from 2006-2012:
-
+options(scipen=999)
 ```
 
 Join the newly simplified arcos_county_totals with the ruralurbancodes2013 into new rural_urban_working. It will now contain the countyfips, state, county name, population, urban group and pill totals.
@@ -111,7 +111,7 @@ rural_urban_working <- rural_urban_working %>%
 
 #adding pills per person column
 rural_urban_working <- rural_urban_working %>%
-  mutate(Pills_per_person = Total_pills / Population_2010 )
+  mutate(Pills_per_person = avg_pills_year/ Population_2010 )
 
 ```
 
@@ -119,10 +119,10 @@ I want to attempt to condense the rural_urban_working data and get summaries for
 ```{r}
 rural_urban_condensed <- rural_urban_working %>%
   group_by(RUCC_2013) %>%
-  mutate(Total_pills =sum(Total_pills))  %>%
-  mutate(Total_population =sum(Population_2010)) %>%
-  select(-Population_2010) %>% 
-  select(-Pills_per_person) 
+  summarise(avg_pills_year=sum(avg_pills_year),
+            Total_population=sum(Population_2010)) %>%
+  mutate(Pills_per_person = avg_pills_year/ Total_population)
+
 
 ```
 
@@ -157,14 +157,20 @@ rural_urban_geo <- rural_urban_geo %>%
 ```
 
 ```{r}
-#making the MAP itself
-rural_urban_geo %>%
+#making the MAP itself 
+rural_urban_geo_x <- rural_urban_geo %>%
+  mutate(RUCC_2013=as.character(RUCC_2013)) %>%
+  filter(str_detect(RUCC_2013, "3|4|5|6"))
+
+rural_urban_geo_x %>%
   ggplot(aes(fill = RUCC_2013)) +
+ # facet_wrap(~State) +
   geom_sf(lwd = 0) +
   theme_map() +
   labs(fill='Rural to Urban',title="Rural and urban area classifications", subtitle = "USDA, 2013", caption = "Source: USDA") +
   theme(legend.position="right") +
-  scale_fill_viridis_c(option = "plasma",labels = comma)
+  scale_fill_viridis_d(option = "plasma") 
+  
 
 ```
  
@@ -182,6 +188,8 @@ rural_urban_geo %>%
  
 Make a BAR CHART visualizing pills per person versus urban/rural group.
 ```{r}
+#FIX THIS SO THE PILLS PER PERSON IS CORRECT
+
 #New rural urban with description
 rural_urban_desc <- ruralurbancodes2013 %>%
   mutate(countyfips = FIPS) %>%
