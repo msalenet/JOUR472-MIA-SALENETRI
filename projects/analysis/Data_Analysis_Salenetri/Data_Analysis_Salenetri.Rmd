@@ -45,8 +45,6 @@ ruralurbancodes2013 <- read_csv("ruralurbancodes2013.csv")
 ARCOSkey <- "uO4EK6I"
 ```
 
-Because I'm having trouble working on some of the actual coding aspects, I'm going to start by writing out what I intend to do once I have the tools I need to start my analysis.
-
 Using the nine rural/urban population groups determined by the USDA, I want to determine whether different demographic groups are affected differently based on the size of a metro area.
 
 First, I want to import the datasets I'll need:
@@ -56,6 +54,8 @@ First, I want to import the datasets I'll need:
  - Census demographic data by county for race/ethnicity and economic class 
  
 ```{r}
+options(scipen=999)
+
 #set CENSUSkey
 census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
 
@@ -92,7 +92,7 @@ arcos_county_totals <- arcos_county_pills_per_year %>%
   summarise(avg_pills_year = mean(dosage_unit))
 
 #total deaths by county from 2006-2012:
-options(scipen=999)
+
 ```
 
 Join the newly simplified arcos_county_totals with the ruralurbancodes2013 into new rural_urban_working. It will now contain the countyfips, state, county name, population, urban group and pill totals.
@@ -116,6 +116,7 @@ rural_urban_working <- rural_urban_working %>%
 ```
 
 I want to attempt to condense the rural_urban_working data and get summaries for the entire group of nine
+The two more rural groups and one most urban have the lowest rates of pills per person.
 ```{r}
 rural_urban_condensed <- rural_urban_working %>%
   group_by(RUCC_2013) %>%
@@ -123,12 +124,27 @@ rural_urban_condensed <- rural_urban_working %>%
             Total_population=sum(Population_2010)) %>%
   mutate(Pills_per_person = avg_pills_year/ Total_population)
 
-
+#chart, comparing urbanness/ruralness to pills per person
+ggplot(rural_urban_condensed) +
+  geom_bar(stat="identity", aes(RUCC_2013, Pills_per_person), fill="pink") +
+  labs(x="Size of metro area (most urban to most rural)", y="Pills per person", title="title", subtitle = "subtitle", caption = "caption/source") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_y_continuous(labels = comma)+
+  theme_classic()+
+  scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9))
 ```
 
 Now, join the census demographic dataset and the USDA population/metro size dataset. Instead of looking at the racial makeup and socioeconomic class for each county, I want to use the median incomes and racial makeups by size of metro area. For example, I want to say that the median household income for a county in a nonmetro area with an urban population of 20,000 or more is X. 
 ```{r}
+median_income <- median_income %>%
+  rename(countyfips = GEOID) %>%
+  select(-variable)
 
+big_data <- big_data %>%
+  inner_join(median_income, by = NULL, copy = FALSE) 
+
+big_data <- big_data %>%
+  rename(med_income = estimate)
 #join census demographics with USDA population and metro area group
 ```
 
@@ -136,8 +152,7 @@ While I won't be able to open it on my personal computer, I want to have a massi
 ```{r}
 #combine arcos data with USDA (county, state, fips, population, pills/person, rural/urban rank) 
 big_data <- rural_urban_working %>%
-  group_by(countyfips) %>%
-  select(-Total_pills)
+  group_by(countyfips) 
   
 
 #then add the demographics for each county (race/ethnicity and median income)
@@ -185,30 +200,38 @@ rural_urban_geo %>%
   scale_fill_viridis_c(option = "plasma",labels = comma)
 
 ```
- 
-Make a BAR CHART visualizing pills per person versus urban/rural group.
+
+try to make a cluster plot with multiple factors
+this ones: rural/urban code, pills per person, median income
 ```{r}
-#FIX THIS SO THE PILLS PER PERSON IS CORRECT
+install.packages("ggalt")
+install.packages("ggfortify")
+```
 
-#New rural urban with description
-rural_urban_desc <- ruralurbancodes2013 %>%
-  mutate(countyfips = FIPS) %>%
-  select(-FIPS) %>%
-  select(-X7) %>%
-  select(-X8) 
-rural_urban_desc <- rural_urban_desc %>%
-  inner_join(arcos_county_totals, by = NULL, copy = FALSE)
-rural_urban_desc <- rural_urban_desc %>%
-  mutate(Pills_per_person = Total_pills / Population_2010 )
+```{r}
+# devtools::install_github("hrbrmstr/ggalt")
+library(ggplot2)
+library(ggalt)
+library(ggfortify)
+theme_set(theme_classic())
 
-#chart, comparing urbanness/ruralness to pills per person
-ggplot(rural_urban_desc) +
-  geom_bar(stat="identity", aes(RUCC_2013, Pills_per_person), fill="pink") +
-  labs(x="Size of metro area (most urban to most rural)", y="Pills per person", title="title", subtitle = "subtitle", caption = "caption/source") + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-  scale_y_continuous(labels = comma)+
-  theme_classic()+
-  scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9))
+ggplot(big_data, aes(med_income, Pills_per_person, col=RUCC_2013)) + 
+  geom_point(aes(shape=RUCC_2013), size=2) +   # draw points
+  labs(title="Title", 
+       subtitle="subtitle",
+       caption="Source")
+
+# Plot ----------------------------------------------------
+ggplot(big_data, aes(x=median_income, y=Pills_per_person)) + 
+  geom_point(aes(col=RUCC_2013)) + 
+  geom_smooth(method="loess", se=F) + 
+  xlim(c(0, 185000)) + 
+  ylim(c(0, 15000)) + 
+  labs(subtitle="subtitle", 
+       y="Pills per person", 
+       x="Median household income", 
+       title="Scatterplot", 
+       caption = "Source: ")
 
 ```
 
