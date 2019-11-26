@@ -18,6 +18,8 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("janitor")
 #install.packages("scales")
 #install.packages("ggrepel")
+#install.packages("ggalt")
+#install.packages("ggfortify")
 ```
 
 ```{r}
@@ -31,6 +33,8 @@ library(ggthemes)
 library(dplyr)
 options(scipen = 0)
 library(ggplot2)
+library(ggalt)
+library(ggfortify)
 ```
 
 ```{r}
@@ -91,7 +95,6 @@ arcos_county_totals <- arcos_county_pills_per_year %>%
   group_by(countyfips) %>%
   summarise(avg_pills_year = mean(dosage_unit))
 
-#total deaths by county from 2006-2012:
 
 ```
 
@@ -201,41 +204,33 @@ rural_urban_geo %>%
 
 ```
 
-try to make a cluster plot with multiple factors
-this ones: rural/urban code, pills per person, median income
+Let's add some BLS OES data
+
 ```{r}
-install.packages("ggalt")
-install.packages("ggfortify")
+unemployment06 <- read_csv('BLS_Data/laucnty06.csv')
+unemployment07 <- read_csv('BLS_Data/laucnty07.csv')
+unemployment08 <- read_csv('BLS_Data/laucnty08.csv')
+unemployment09 <- read_csv('BLS_Data/laucnty09.csv')
+unemployment10 <- read_csv('BLS_Data/laucnty10.csv')
+unemployment11 <- read_csv('BLS_Data/laucnty11.csv')
+unemployment12 <- read_csv('BLS_Data/laucnty12.csv')
 ```
 
+need to change the state & county fips in the unemployment data so i can join it with everything else
 ```{r}
-# devtools::install_github("hrbrmstr/ggalt")
-library(ggplot2)
-library(ggalt)
-library(ggfortify)
-theme_set(theme_classic())
-
-ggplot(big_data, aes(med_income, Pills_per_person, col=RUCC_2013)) + 
-  geom_point(aes(shape=RUCC_2013), size=2) +   # draw points
-  labs(title="Title", 
-       subtitle="subtitle",
-       caption="Source")
-
-# Plot ----------------------------------------------------
-ggplot(big_data, aes(x=median_income, y=Pills_per_person)) + 
-  geom_point(aes(col=RUCC_2013)) + 
-  geom_smooth(method="loess", se=F) + 
-  xlim(c(0, 185000)) + 
-  ylim(c(0, 15000)) + 
-  labs(subtitle="subtitle", 
-       y="Pills per person", 
-       x="Median household income", 
-       title="Scatterplot", 
-       caption = "Source: ")
+test_unemployment06 <- unemployment06 %>%
+  format(state_fips, digits ='2')
 
 ```
 
-Based on what we see here, I want to look closer at the groups marked 6 and 7. Why do they have so much higher rates of pills/person?
+
+
+
+
+
+
+
+
 
 
 
