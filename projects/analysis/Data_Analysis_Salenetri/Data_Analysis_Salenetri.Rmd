@@ -130,7 +130,7 @@ rural_urban_condensed <- rural_urban_working %>%
 #chart, comparing urbanness/ruralness to pills per person
 ggplot(rural_urban_condensed) +
   geom_bar(stat="identity", aes(RUCC_2013, Pills_per_person), fill="pink") +
-  labs(x="Size of metro area (most urban to most rural)", y="Pills per person", title="title", subtitle = "subtitle", caption = "caption/source") + 
+  labs(x="Size of metro area (most urban to most rural)", y="Pills per person", title="pills per person", subtitle = "subtitle", caption = "caption/source") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1))+
   scale_y_continuous(labels = comma)+
   theme_classic()+
@@ -182,7 +182,7 @@ rural_urban_geo_x <- rural_urban_geo %>%
 
 rural_urban_geo_x %>%
   ggplot(aes(fill = RUCC_2013)) +
- # facet_wrap(~State) +
+  #facet_wrap(~State) +
   geom_sf(lwd = 0) +
   theme_map() +
   labs(fill='Rural to Urban',title="Rural and urban area classifications", subtitle = "USDA, 2013", caption = "Source: USDA") +
@@ -204,30 +204,65 @@ rural_urban_geo %>%
 
 ```
 
-Let's add some BLS OES data
+median income map
 
 ```{r}
-unemployment06 <- read_csv('BLS_Data/laucnty06.csv')
-unemployment07 <- read_csv('BLS_Data/laucnty07.csv')
-unemployment08 <- read_csv('BLS_Data/laucnty08.csv')
-unemployment09 <- read_csv('BLS_Data/laucnty09.csv')
-unemployment10 <- read_csv('BLS_Data/laucnty10.csv')
-unemployment11 <- read_csv('BLS_Data/laucnty11.csv')
-unemployment12 <- read_csv('BLS_Data/laucnty12.csv')
+rural_urban_geo_y <- rural_urban_geo %>%
+  mutate(RUCC_2013=as.character(RUCC_2013)) %>%
+  filter(str_detect(RUCC_2013, "5|7"))
+
+rural_urban_geo_y %>%
+  ggplot(aes(fill = estimate)) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='median income',title="median income by US county", subtitle = "rucc_2013 5 and 7", caption = "Source: bls?") +
+  theme(legend.position="right") +
+  scale_fill_viridis_c(option = "plasma",labels = comma)
+
+ggplot(rural_urban_geo_y, aes(x=estimate, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="median income vs pills/person by rucc", subtitle = "rucc_2013 5 and 7", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
 ```
 
-need to change the state & county fips in the unemployment data so i can join it with everything else
+same thing but by 8 & 9
 ```{r}
-test_unemployment06 <- unemployment06 %>%
-  format(state_fips, digits ='2')
+rural_urban_geo_y <- rural_urban_geo %>%
+  mutate(RUCC_2013=as.character(RUCC_2013)) %>%
+  filter(str_detect(RUCC_2013, "8|9"))
+
+ggplot(rural_urban_geo_y, aes(x=estimate, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="median income vs pills/person by rucc", subtitle = "rucc_2013 8 and 9", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
 
 ```
 
+does income have anything to do with this? doesnt seem like it ^
 
+LETS LOOK AT HEALTH DATA
+```{r}
+county_alc_use <- read_csv("health_data/ALC_USE_ANY_2005_2012.csv")
+county_alc_use_heavy <- read_csv("health_data/ALC_USE_HEAVY_2005_2012.csv")
 
+county_alc_use <- county_alc_use %>%
+  inner_join(rural_urban_working, by = NULL, copy = FALSE)
 
+county_alc_use_heavy <- county_alc_use_heavy %>%
+  inner_join(rural_urban_working, by = NULL, copy = FALSE)
 
+alc_use_gender_heavy <- county_alc_use_heavy %>%
+  mutate(avg_female = mean(ends_with(Females)))%>%
+  select(-`2006 Both Sexes`, -`2007 Both Sexes`, -`2008 Both Sexes`, -`2009 Both Sexes`, -`2010 Both Sexes`, -`2011 Both Sexes`, -`2012 Both Sexes`, -`Percent Change 2005-2012, Both Sexes`)
 
+```
+
+lets look at a graph of how heavy alcohol use compares to these other variables
+```{r}
+glimpse(alc_use_gender_heavy)
+
+```
 
 
 
