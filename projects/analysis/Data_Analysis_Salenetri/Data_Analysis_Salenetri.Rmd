@@ -141,15 +141,15 @@ ggplot(rural_urban_condensed) +
 
 Now, join the census demographic dataset and the USDA population/metro size dataset. Instead of looking at the racial makeup and socioeconomic class for each county, I want to use the median incomes and racial makeups by size of metro area. For example, I want to say that the median household income for a county in a nonmetro area with an urban population of 20,000 or more is X. 
 ```{r}
-median_income <- median_income %>%
-  rename(countyfips = GEOID) %>%
-  select(-variable)
+#median_income <- median_income %>%
+#  rename(countyfips = GEOID) %>%
+#  select(-variable)
 
-big_data <- big_data %>%
-  inner_join(median_income, by = NULL, copy = FALSE) 
+#big_data <- big_data %>%
+#  inner_join(median_income, by = NULL, copy = FALSE) 
 
-big_data <- big_data %>%
-  rename(med_income = estimate)
+#big_data <- big_data %>%
+#  rename(med_income = estimate)
 #join census demographics with USDA population and metro area group
 ```
 
