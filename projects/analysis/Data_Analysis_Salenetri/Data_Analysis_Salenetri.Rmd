@@ -20,6 +20,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("ggrepel")
 #install.packages("ggalt")
 #install.packages("ggfortify")
+#install.packages("gapminder")
 ```
 
 ```{r}
@@ -35,6 +36,7 @@ options(scipen = 0)
 library(ggplot2)
 library(ggalt)
 library(ggfortify)
+library(gapminder)
 ```
 
 ```{r}
@@ -241,28 +243,44 @@ ggplot(rural_urban_geo_y, aes(x=estimate, y=Pills_per_person, shape=RUCC_2013, c
 
 does income have anything to do with this? doesnt seem like it ^
 
-LETS LOOK AT HEALTH DATA
+LETS LOOK AT HEAVY ALCOHOL USE
 ```{r}
-county_alc_use <- read_csv("health_data/ALC_USE_ANY_2005_2012.csv")
 county_alc_use_heavy <- read_csv("health_data/ALC_USE_HEAVY_2005_2012.csv")
-
-county_alc_use <- county_alc_use %>%
-  inner_join(rural_urban_working, by = NULL, copy = FALSE)
 
 county_alc_use_heavy <- county_alc_use_heavy %>%
   inner_join(rural_urban_working, by = NULL, copy = FALSE)
 
-alc_use_gender_heavy <- county_alc_use_heavy %>%
-  mutate(avg_female = mean(ends_with(Females)))%>%
-  select(-`2006 Both Sexes`, -`2007 Both Sexes`, -`2008 Both Sexes`, -`2009 Both Sexes`, -`2010 Both Sexes`, -`2011 Both Sexes`, -`2012 Both Sexes`, -`Percent Change 2005-2012, Both Sexes`)
+alc_use_heavy <- county_alc_use_heavy %>%
+  select(`State`, `County_Name`, `2006 Both Sexes`, `2007 Both Sexes`, `2008 Both Sexes`, `2009 Both Sexes`, `2010 Both Sexes`, `2011 Both Sexes`, `2012 Both Sexes`, `RUCC_2013`, `countyfips`, `Pills_per_person`) %>%
+  mutate(avg_use = rowMeans(select(county_alc_use_heavy, ends_with("Both Sexes")))) %>%
+  mutate(RUCC_2013 = as.character(RUCC_2013))%>%
+  filter(str_detect(RUCC_2013, "5|7"))
 
 ```
 
 lets look at a graph of how heavy alcohol use compares to these other variables
 ```{r}
-glimpse(alc_use_gender_heavy)
+glimpse(alc_use_heavy)
+
+ggplot(alc_use_heavy, aes(x=avg_use, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="heavy alcohol use vs pills/person by rucc", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
 
 ```
+
+looks like heavy alcohol use also has nothing to do with pills/person
+
+okayyyy in a perfect world i would be looking at unemployment data next but i cant get the formatting right and i give up
+```{r}
+
+
+```
+
+
+
+
+
 
 
 
