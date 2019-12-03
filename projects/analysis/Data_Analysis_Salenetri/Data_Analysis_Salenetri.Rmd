@@ -37,6 +37,7 @@ library(ggplot2)
 library(ggalt)
 library(ggfortify)
 library(gapminder)
+library(readxl)
 ```
 
 ```{r}
@@ -271,15 +272,132 @@ ggplot(alc_use_heavy, aes(x=avg_use, y=Pills_per_person, shape=RUCC_2013, color=
 
 looks like heavy alcohol use also has nothing to do with pills/person
 
-okayyyy in a perfect world i would be looking at unemployment data next but i cant get the formatting right and i give up
+break it down by gender, get the averages
 ```{r}
+county_alc_use_heavy <- county_alc_use_heavy %>%
+  select(-`Percent Change 2005-2012, Both Sexes`, -`Percent Change 2005-2012, Females`, -`Percent Change 2005-2012, Males`) %>%
+  mutate(avg_use_male = rowMeans(select(county_alc_use_heavy, ends_with("Males")))) %>%
+  mutate(avg_use_female = rowMeans(select(county_alc_use_heavy, ends_with("Females")))) %>%
+  mutate(avg_use = rowMeans(select(county_alc_use_heavy, ends_with("Both Sexes")))) %>%
+  mutate(RUCC_2013 = as.character(RUCC_2013))%>%
+  filter(str_detect(RUCC_2013, "5|7"))
+```
+
+graph the averages for male & female heavy drinking
+```{r}
+ggplot(county_alc_use_heavy, aes(x=avg_use_male, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="heavy alcohol use by males vs pills/person by rucc", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+ggplot(county_alc_use_heavy, aes(x=avg_use_female, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="heavy alcohol use by females vs pills/person by rucc", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+```
+
+looking at unemployment data next! input it all and then make one massive frame with all the unemployment rates
+```{r}
+unemployment06 <- read_xlsx("BLS_data/laucnty06.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2006_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips, -...6)
+
+unemployment07 <- read_xlsx("BLS_data/laucnty07.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2007_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+
+unemployment08 <- read_xlsx("BLS_data/laucnty08.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2008_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+
+unemployment09 <- read_xlsx("BLS_data/laucnty09.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2009_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+
+unemployment10 <- read_xlsx("BLS_data/laucnty10.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2010_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+
+unemployment11 <- read_xlsx("BLS_data/laucnty11.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2011_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+
+unemployment12 <- read_xlsx("BLS_data/laucnty12.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2012_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+
+#tried making a blank data frame, didn't help
+#unemployment_all <- data.frame(county_name=character(), 
+                               #fips=character(), 
+                               #stringsAsFactors=FALSE) 
+```
+
+adding all the unemployment rates into one frame
+```{r}
+
+unemployment_all <- unemployment06 %>%
+  select(-year, -labor_force, -employed, -unemployed) 
+
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment07, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment08, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment09, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment10, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment11, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment12, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+```
+combine the unemployment data w everything else
+```{r}
+unemployment_all <- unemployment_all %>%
+  inner_join(big_data, by = NULL, copy = FALSE) %>%
+  select(-State, -County_Name)
+```
+
+Now try to graph it based on just highest pills/person
+```{r}
+unemployment_all_x <- unemployment_all %>%
+  inner_join(big_data, by = NULL, copy = FALSE) %>%
+  filter(str_detect(RUCC_2013, "5|7")) %>%
+  select(-State, -County_Name)
 
 
 ```
 
+move onto life expectancy while we're waiting
+ok nvm i need help with this too :(
+```{r}
+life_expectancy <- read_xlsx('health_data/LIFE_EXPECTANCY_2005_2014.xlsx') %>%
+  clean_names() %>%
+  separate(life_expectancy_2005, sep=" \\(", into=c("life_expectancy_2005", "garbage") ) %>%
+  mutate(life_expectancy_2005 = as.numeric(life_expectancy_2005)) %>%
+  select(-garbage) %>%
+  mutate(fips = as.numeric(fips)) %>%
+  mutate(fips = case_when(fips < 10000 ~ paste0("0", fips ),
+                           TRUE ~ as.character(fips))
+         )
 
+```
 
-
+take the code from lines 390, 392, and 392 and do it for every live w ()
 
 
 
