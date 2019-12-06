@@ -38,6 +38,7 @@ library(ggalt)
 library(ggfortify)
 library(gapminder)
 library(readxl)
+library(reprex)
 ```
 
 ```{r}
@@ -158,7 +159,8 @@ While I won't be able to open it on my personal computer, I want to have a massi
 ```{r}
 #combine arcos data with USDA (county, state, fips, population, pills/person, rural/urban rank) 
 big_data <- rural_urban_working %>%
-  group_by(countyfips) 
+  group_by(countyfips) %>%
+  mutate(RUCC_2013 = as.character(RUCC_2013))
   
 
 #then add the demographics for each county (race/ethnicity and median income)
@@ -168,6 +170,9 @@ big_data <- rural_urban_working %>%
 Before I do much analysis with the UDSA data, I want to create a color-coded map that visualizes the sizes of metro areas.
 ```{r}
 #create new dataset for usda group map
+county_geodata_shifted <- county_geodata_shifted %>%
+  mutate(countyfips = GEOID)
+
 rural_urban_geo <- county_geodata_shifted %>%
   mutate(countyfips = GEOID) 
 
@@ -297,6 +302,25 @@ ggplot(county_alc_use_heavy, aes(x=avg_use_female, y=Pills_per_person, shape=RUC
 
 ```
 
+make a clean, basic alc use frame of just averages
+```{r}
+alc_use_clean <- read_csv("health_data/ALC_USE_HEAVY_2005_2012.csv")
+
+alc_use_clean <- alc_use_clean %>%
+  inner_join(rural_urban_working, by = NULL, copy = FALSE) 
+
+alc_use_clean <- alc_use_clean %>%
+  select(-`Percent Change 2005-2012, Both Sexes`, -`Percent Change 2005-2012, Females`, -`Percent Change 2005-2012, Males`) %>%
+  mutate(avg_use_male = rowMeans(select(alc_use_clean, ends_with("Males")))) %>%
+  mutate(avg_use_female = rowMeans(select(alc_use_clean, ends_with("Females")))) %>%
+  mutate(avg_use = rowMeans(select(alc_use_clean, ends_with("Both Sexes")))) %>%
+  mutate(RUCC_2013 = as.character(RUCC_2013))
+
+alc_use_clean <- alc_use_clean %>%
+  select(countyfips, avg_use_male, avg_use_female, avg_use)
+
+```
+
 looking at unemployment data next! input it all and then make one massive frame with all the unemployment rates
 ```{r}
 unemployment06 <- read_xlsx("BLS_data/laucnty06.xlsx") %>%
@@ -365,39 +389,164 @@ unemployment_all <- unemployment_all %>%
   full_join(unemployment12, by = NULL, copy = FALSE) %>%
   select(-year, -labor_force, -employed, -unemployed)
 ```
-combine the unemployment data w everything else
+combine the unemployment data w everything else & graph it
+how do i find whats statistically signifigant?
 ```{r}
 unemployment_all <- unemployment_all %>%
   inner_join(big_data, by = NULL, copy = FALSE) %>%
-  select(-State, -County_Name)
+  select(-State, -County_Name) 
+
+unemployment_all <- unemployment_all %>%
+  mutate(avg_unemployment = rowMeans(select(unemployment_all, ends_with("_rate")))) %>%
+  mutate(RUCC_2013 = as.character(RUCC_2013))
+
+#plot of all groups
+ggplot(unemployment_all, aes(x=avg_unemployment, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="avg unemployment from 2006-2012 vs pills/person by rucc", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+#plot of biggest urban areas
+unemployment_all_x <- unemployment_all%>%
+  filter(str_detect(RUCC_2013, "1|2|3"))
+
+ggplot(unemployment_all_x, aes(x=avg_unemployment, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="avg unemployment from 2006-2012 vs pills/person by rucc", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+#plot of mid-sized
+unemployment_all_y <- unemployment_all%>%
+  filter(str_detect(RUCC_2013, "4|5|6"))
+
+ggplot(unemployment_all_y, aes(x=avg_unemployment, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="avg unemployment from 2006-2012 vs pills/person by rucc", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+#plot of smallest
+unemployment_all_z <- unemployment_all%>%
+  filter(str_detect(RUCC_2013, "7|8|9"))
+
+ggplot(unemployment_all_z, aes(x=avg_unemployment, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="avg unemployment from 2006-2012 vs pills/person by rucc", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
 ```
 
-Now try to graph it based on just highest pills/person
+graph the relationships between unemployment & everything else
+
+
 ```{r}
-unemployment_all_x <- unemployment_all %>%
-  inner_join(big_data, by = NULL, copy = FALSE) %>%
-  filter(str_detect(RUCC_2013, "5|7")) %>%
-  select(-State, -County_Name)
-
 
 ```
 
-move onto life expectancy while we're waiting
-ok nvm i need help with this too :(
+move onto life expectancy 
+clean it up
 ```{r}
 life_expectancy <- read_xlsx('health_data/LIFE_EXPECTANCY_2005_2014.xlsx') %>%
   clean_names() %>%
-  separate(life_expectancy_2005, sep=" \\(", into=c("life_expectancy_2005", "garbage") ) %>%
+  separate(life_expectancy_2005, sep=" \\(", into=c("life_expectancy_2005", "2005_garbage") ) %>%
   mutate(life_expectancy_2005 = as.numeric(life_expectancy_2005)) %>%
-  select(-garbage) %>%
+  separate(life_expectancy_2010, sep=" \\(", into=c("life_expectancy_2010", "2010_garbage") ) %>%
+  mutate(life_expectancy_2010 = as.numeric(life_expectancy_2010)) %>%
+  separate(life_expectancy_2014, sep=" \\(", into=c("life_expectancy_2014", "2014_garbage") ) %>%
+  mutate(life_expectancy_2014 = as.numeric(life_expectancy_2014)) %>%
+  select(-'2005_garbage', -'2010_garbage', -'2014_garbage', -'percent_change_in_life_expectancy_1980_2014') %>%
   mutate(fips = as.numeric(fips)) %>%
   mutate(fips = case_when(fips < 10000 ~ paste0("0", fips ),
                            TRUE ~ as.character(fips))
          )
 
+life_expectancy <- life_expectancy %>%
+  mutate(avg_expectancy = rowMeans(select(life_expectancy, starts_with("life_"))))
 ```
 
-take the code from lines 390, 392, and 392 and do it for every live w ()
+combine with location data so we can map it
+```{r}
+life_expectancy <- life_expectancy %>%
+  rename(countyfips=fips) %>%
+  inner_join(county_geodata_shifted, by=NULL, copy=FALSE) 
+```
+
+i'm getting an error here
+life_expectancy %>%
+  ggplot(aes(fill = avg_expectancy)) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='life expectancy',title="life expectancy by US county", subtitle = "", caption = "Source: health data") +
+  theme(legend.position="right") +
+  scale_fill_viridis_c(option = "plasma",labels = comma)
+
+make sure all the newly imported data points are in big_data
+```{r}
+#life expectancy
+big_data <- big_data %>%
+  full_join(life_expectancy, by=NULL, copy=FALSE) %>%
+  select(State, County_Name, Population_2010, RUCC_2013, countyfips, avg_pills_year, Pills_per_person, avg_expectancy)
+
+#unemployment
+big_data <- big_data %>%
+  inner_join(unemployment_all, by='countyfips', copy=TRUE) %>%
+  select(State, County_Name, Population_2010.x, RUCC_2013.x, countyfips, avg_pills_year.x, Pills_per_person.x, avg_expectancy, avg_unemployment) 
+
+big_data <- big_data %>%
+  rename(Population_2010 = Population_2010.x) %>%
+  rename(RUCC_2013 = RUCC_2013.x) %>%
+  rename(avg_pills_year = avg_pills_year.x) %>%
+  rename(Pills_per_person = Pills_per_person.x)
+
+#heavy alcohol use
+big_data <- big_data %>%
+  inner_join(alc_use_clean, by=NULL, copy=FALSE)
+
+glimpse(big_data)
+```
+
+ok graph as many things as possible to find something
+```{r}
+#alcohol uses versus pills:
+ggplot(big_data, aes(x=avg_use_female, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+ggplot(big_data, aes(x=avg_use_male, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+ggplot(big_data, aes(x=avg_use, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+```
+```{r}
+#life expectancy versus:
+ggplot(big_data, aes(x=avg_expectancy, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+ggplot(big_data, aes(x=avg_expectancy, y=avg_unemployment, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+ggplot(big_data, aes(x=avg_expectancy, y=avg_use, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+```
+
+
+
+
+
+
+
+
+
 
 
 
