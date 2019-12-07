@@ -21,6 +21,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("ggalt")
 #install.packages("ggfortify")
 #install.packages("gapminder")
+#install.packages("corrr")
 ```
 
 ```{r}
@@ -39,6 +40,7 @@ library(ggfortify)
 library(gapminder)
 library(readxl)
 library(reprex)
+library(corrr)
 ```
 
 ```{r}
@@ -434,12 +436,61 @@ ggplot(unemployment_all_z, aes(x=avg_unemployment, y=Pills_per_person, shape=RUC
   geom_smooth(method=lm)
 ```
 
-graph the relationships between unemployment & everything else
+ok its time for race
+```{r}
+race_data <- read_csv('census_data/Race/race_data_with_overlays.csv')
 
+race_data <- race_data %>%
+  select(-B02001_001M, -B02001_002M, -B02001_003M, -B02001_004M, -B02001_005M, -B02001_006M, -B02001_007M, -B02001_008M, -B02001_009M, -B02001_010M)%>%
+  rename(total = B02001_001E) %>%
+  rename(white_alone = B02001_002E) %>%
+  rename(black_alone = B02001_003E)%>%
+  rename(native_alone = B02001_004E)%>%
+  rename(asian_alone = B02001_005E)%>%
+  rename(hawaiian_pacific_alone = B02001_006E)%>%
+  rename(other_alone = B02001_007E)%>%
+  rename(two_or_more = B02001_008E)%>%
+  rename(two_or_more_other = B02001_009E)%>%
+  rename(three_or_more = B02001_010E)
+
+race_data <- race_data[-c(1),]
+
+race_data <- race_data %>%
+  mutate(total = as.numeric(total))%>%
+  mutate(white_alone = as.numeric(white_alone))%>%
+  mutate(black_alone = as.numeric(black_alone))%>%
+  mutate(native_alone = as.numeric(native_alone))%>%
+  mutate(asian_alone = as.numeric(asian_alone))%>%
+  mutate(hawaiian_pacific_alone = as.numeric(hawaiian_pacific_alone))%>%
+  mutate(other_alone = as.numeric(other_alone))%>%
+  mutate(two_or_more = as.numeric(two_or_more))%>%
+  mutate(two_or_more_other = as.numeric(two_or_more_other))%>%
+  mutate(three_or_more = as.numeric(three_or_more))
+
+race_data <- race_data %>%
+  mutate(non_white = rowSums(race_data[,c("black_alone", "native_alone", "asian_alone", "hawaiian_pacific_alone", "other_alone", "two_or_more", "two_or_more_other", "three_or_more")]))
+
+race_data <- race_data %>%
+  mutate(percent_white = white_alone / total) %>%
+  mutate(percent_non_white = non_white / total)
+
+race_data_x <- race_data %>%
+  inner_join(median_income, by=NULL, copy=FALSE) %>%
+  select(-GEO_ID) %>%
+  rename(countyfips = GEOID)
+```
 
 ```{r}
+race_data_x %>%
+  ggplot(aes(fill = percent_white, geometry=geometry)) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='PIlls per person',title="Pills per person by US county", subtitle = "", caption = "Source: ARCOS") +
+  theme(legend.position="right") +
+  scale_fill_viridis_c(option = "plasma",labels = comma)
 
 ```
+
 
 move onto life expectancy 
 clean it up
@@ -459,36 +510,50 @@ life_expectancy <- read_xlsx('health_data/LIFE_EXPECTANCY_2005_2014.xlsx') %>%
          )
 
 life_expectancy <- life_expectancy %>%
-  mutate(avg_expectancy = rowMeans(select(life_expectancy, starts_with("life_"))))
+  mutate(avg_expectancy = rowMeans(select(life_expectancy, starts_with("life_")))) %>%
+  rename(med_income = estimate) 
 ```
 
 combine with location data so we can map it
 ```{r}
+
 life_expectancy <- life_expectancy %>%
   rename(countyfips=fips) %>%
   inner_join(county_geodata_shifted, by=NULL, copy=FALSE) 
+
+
+
 ```
 
 i'm getting an error here
+```{r}
 life_expectancy %>%
-  ggplot(aes(fill = avg_expectancy)) +
+  ggplot(aes(fill = avg_expectancy, geometry = geometry)) +
   geom_sf(lwd = 0) +
   theme_map() +
   labs(fill='life expectancy',title="life expectancy by US county", subtitle = "", caption = "Source: health data") +
   theme(legend.position="right") +
   scale_fill_viridis_c(option = "plasma",labels = comma)
 
+rural_urban_geo %>%
+  ggplot(aes(fill = Pills_per_person)) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='PIlls per person',title="Pills per person by US county", subtitle = "", caption = "Source: ARCOS") +
+  theme(legend.position="right") +
+  scale_fill_viridis_c(option = "plasma",labels = comma)
+```
 make sure all the newly imported data points are in big_data
 ```{r}
 #life expectancy
 big_data <- big_data %>%
   full_join(life_expectancy, by=NULL, copy=FALSE) %>%
-  select(State, County_Name, Population_2010, RUCC_2013, countyfips, avg_pills_year, Pills_per_person, avg_expectancy)
+  select(State, County_Name, Population_2010, RUCC_2013, countyfips, avg_pills_year, Pills_per_person, avg_expectancy, med_income)
 
 #unemployment
 big_data <- big_data %>%
   inner_join(unemployment_all, by='countyfips', copy=TRUE) %>%
-  select(State, County_Name, Population_2010.x, RUCC_2013.x, countyfips, avg_pills_year.x, Pills_per_person.x, avg_expectancy, avg_unemployment) 
+  select(State, County_Name, Population_2010.x, RUCC_2013.x, countyfips, avg_pills_year.x, Pills_per_person.x, avg_expectancy, avg_unemployment, med_income) 
 
 big_data <- big_data %>%
   rename(Population_2010 = Population_2010.x) %>%
@@ -500,7 +565,44 @@ big_data <- big_data %>%
 big_data <- big_data %>%
   inner_join(alc_use_clean, by=NULL, copy=FALSE)
 
-glimpse(big_data)
+#add race
+big_data <- big_data %>%
+  full_join(race_data_x, by=NULL, copy=FALSE) %>%
+  select(State, County_Name, Population_2010, RUCC_2013, countyfips, avg_pills_year, Pills_per_person, avg_expectancy, avg_unemployment, med_income, avg_use_male, avg_use_female, avg_use, percent_white, percent_non_white, geometry)
+```
+
+
+```{r}
+
+# Correlation table
+big_data %>%
+  ungroup() %>%
+  select(-State, -County_Name, -countyfips, -avg_pills_year, -RUCC_2013) %>%
+  #cor()
+  correlate() %>%
+  select(rowname, Pills_per_person)
+
+# P value for one set of variables
+cor.test(big_data$avg_expectancy, big_data$Pills_per_person)
+
+# RUCC_ONLY
+first_lm <- lm(Pills_per_person ~ RUCC_2013, data=big_data)
+summary(first_lm)
+
+# Linear Model (keep adding new variable with a plus sign.  )
+first_lm <- lm(Pills_per_person ~ avg_expectancy+avg_unemployment+avg_use+med_income+percent_white+percent_non_white, data=big_data)
+summary(first_lm)
+plot(Pills_per_person ~ RUCC_2013, data=big_data)
+abline(first_lm)
+
+
+#glimpse(big_data)
+
+
+# First point: though this is often thought of as a rural problem, the pill shipments were mostly targeted not at the most remote counties, but at RUCC 4,5,6,7. 
+# Second point: here are the people who were targeted by this trend: unemployment (higher rates of unemployment), health (life expectancy (shorter lives)), race (pct_white, pct_nonwhite, -- it's mostly white people), poverty (pct_poverty, higher poverty rate), income (median_household_income, lower median household income), opioid_death_rate (higher rate).  AVERAGES for RUCC GROUP.  REGRESSIONS FOR EACH RUCC GROUP
+# Here's where I'll report this story: a county in the RUCC2013_5 group, that has high rates of unemp.  Paint me a picture what it looks like there. 
+
 ```
 
 ok graph as many things as possible to find something
