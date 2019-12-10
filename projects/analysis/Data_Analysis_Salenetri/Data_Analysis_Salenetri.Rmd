@@ -109,10 +109,7 @@ Join the newly simplified arcos_county_totals with the ruralurbancodes2013 into 
 #changing column names and removing unnecessary columns
 rural_urban_working <- ruralurbancodes2013 %>%
   mutate(countyfips = FIPS) %>%
-  select(-FIPS) %>%
-  select(-Description) %>%
-  select(-X7) %>%
-  select(-X8) 
+  select(-FIPS, -Description, -X7, -X8)
 
 #joining the two tables 
 rural_urban_working <- rural_urban_working %>%
@@ -131,7 +128,8 @@ rural_urban_condensed <- rural_urban_working %>%
   group_by(RUCC_2013) %>%
   summarise(avg_pills_year=sum(avg_pills_year),
             Total_population=sum(Population_2010)) %>%
-  mutate(Pills_per_person = avg_pills_year/ Total_population)
+  mutate(Pills_per_person = avg_pills_year/ Total_population) %>%
+  mutate_if(is.numeric, round, digits = 2)
 
 #chart, comparing urbanness/ruralness to pills per person
 ggplot(rural_urban_condensed) +
@@ -188,7 +186,7 @@ rural_urban_geo <- rural_urban_geo %>%
 #making the MAP itself 
 rural_urban_geo_x <- rural_urban_geo %>%
   mutate(RUCC_2013=as.character(RUCC_2013)) %>%
-  filter(str_detect(RUCC_2013, "3|4|5|6"))
+  filter(str_detect(RUCC_2013, "4|5|6|7"))
 
 rural_urban_geo_x %>%
   ggplot(aes(fill = RUCC_2013)) +
@@ -199,7 +197,17 @@ rural_urban_geo_x %>%
   theme(legend.position="right") +
   scale_fill_viridis_d(option = "plasma") 
   
+rural_urban_geo_y <- rural_urban_geo %>%
+  mutate(RUCC_2013=as.character(RUCC_2013)) 
 
+rural_urban_geo_y %>%
+  ggplot(aes(fill = RUCC_2013)) +
+  #facet_wrap(~State) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='Rural to Urban',title="Rural and urban area classifications", subtitle = "USDA, 2013", caption = "Source: USDA") +
+  theme(legend.position="right") +
+  scale_fill_viridis_d(option = "plasma") 
 ```
  
 ```{r}
@@ -371,7 +379,6 @@ adding all the unemployment rates into one frame
 
 unemployment_all <- unemployment06 %>%
   select(-year, -labor_force, -employed, -unemployed) 
-
 unemployment_all <- unemployment_all %>%
   full_join(unemployment07, by = NULL, copy = FALSE) %>%
   select(-year, -labor_force, -employed, -unemployed)
@@ -485,7 +492,7 @@ race_data_x %>%
   ggplot(aes(fill = percent_white, geometry=geometry)) +
   geom_sf(lwd = 0) +
   theme_map() +
-  labs(fill='PIlls per person',title="Pills per person by US county", subtitle = "", caption = "Source: ARCOS") +
+  labs(fill='Percent white',title="percent white", subtitle = "", caption = "Source: census") +
   theme(legend.position="right") +
   scale_fill_viridis_c(option = "plasma",labels = comma)
 
@@ -509,9 +516,6 @@ life_expectancy <- read_xlsx('health_data/LIFE_EXPECTANCY_2005_2014.xlsx') %>%
                            TRUE ~ as.character(fips))
          )
 
-life_expectancy <- life_expectancy %>%
-  mutate(avg_expectancy = rowMeans(select(life_expectancy, starts_with("life_")))) %>%
-  rename(med_income = estimate) 
 ```
 
 combine with location data so we can map it
@@ -522,10 +526,13 @@ life_expectancy <- life_expectancy %>%
   inner_join(county_geodata_shifted, by=NULL, copy=FALSE) 
 
 
+life_expectancy <- life_expectancy %>%
+  mutate(avg_expectancy = rowMeans(select(life_expectancy, starts_with("life_")))) %>%
+  rename(med_income = estimate)
 
 ```
 
-i'm getting an error here
+map of life expectancy
 ```{r}
 life_expectancy %>%
   ggplot(aes(fill = avg_expectancy, geometry = geometry)) +
@@ -568,7 +575,8 @@ big_data <- big_data %>%
 #add race
 big_data <- big_data %>%
   full_join(race_data_x, by=NULL, copy=FALSE) %>%
-  select(State, County_Name, Population_2010, RUCC_2013, countyfips, avg_pills_year, Pills_per_person, avg_expectancy, avg_unemployment, med_income, avg_use_male, avg_use_female, avg_use, percent_white, percent_non_white, geometry)
+  select(State, County_Name, Population_2010, RUCC_2013, countyfips, avg_pills_year, Pills_per_person, avg_expectancy, avg_unemployment, med_income, avg_use_male, avg_use_female, avg_use, percent_white, percent_non_white, geometry)%>%
+  mutate(RUCC_2013 = as.numeric(RUCC_2013))
 ```
 
 
@@ -577,7 +585,7 @@ big_data <- big_data %>%
 # Correlation table
 big_data %>%
   ungroup() %>%
-  select(-State, -County_Name, -countyfips, -avg_pills_year, -RUCC_2013) %>%
+  select(-State, -County_Name, -countyfips, -avg_pills_year, -RUCC_2013, -geometry) %>%
   #cor()
   correlate() %>%
   select(rowname, Pills_per_person)
@@ -586,17 +594,31 @@ big_data %>%
 cor.test(big_data$avg_expectancy, big_data$Pills_per_person)
 
 # RUCC_ONLY
-first_lm <- lm(Pills_per_person ~ RUCC_2013, data=big_data)
-summary(first_lm)
+rucc_lm <- lm(Pills_per_person ~ RUCC_2013, data=big_data)
+summary(rucc_lm)
+
+white_lm <- lm(Pills_per_person ~ percent_white, data=big_data)
+summary(white_lm)
+
+non_white_lm <- lm(Pills_per_person ~ percent_non_white, data=big_data)
+summary(non_white_lm)
+
+income_lm <- lm(Pills_per_person ~ med_income, data=big_data_focused)
+summary(income_lm)
 
 # Linear Model (keep adding new variable with a plus sign.  )
-first_lm <- lm(Pills_per_person ~ avg_expectancy+avg_unemployment+avg_use+med_income+percent_white+percent_non_white, data=big_data)
+first_lm <- lm(Pills_per_person ~ avg_expectancy+avg_unemployment+percent_white+avg_use+avg_use_male+avg_use_female, data=big_data)
 summary(first_lm)
+
+second_lm <- lm(Pills_per_person ~ avg_expectancy+avg_unemployment+med_income+percent_white+RUCC_2013+avg_use+avg_use_male+avg_use_female, data=big_data_focused)
+summary(second_lm)
+
 plot(Pills_per_person ~ RUCC_2013, data=big_data)
 abline(first_lm)
 
+plot(Pills_per_person ~ avg_expectancy+avg_unemployment+med_income+percent_white+avg_use+avg_use_male+avg_use_female, data=big_data)
 
-#glimpse(big_data)
+glimpse(big_data)
 
 
 # First point: though this is often thought of as a rural problem, the pill shipments were mostly targeted not at the most remote counties, but at RUCC 4,5,6,7. 
@@ -641,8 +663,50 @@ ggplot(big_data, aes(x=avg_expectancy, y=avg_use, shape=RUCC_2013, color=RUCC_20
   geom_smooth(method=lm)
 ```
 
+finding the optimal county to ship pills
+```{r}
+big_data_optimal <- big_data_focused %>%
+  select(-med_income, -avg_use_male, -avg_use_female, -percent_white, -percent_non_white, -geometry) %>%
+  filter(avg_expectancy < 75) %>%
+  filter(avg_unemployment > 10) %>%
+  filter(avg_use < 7.5) %>%
+  filter(Pills_per_person > 40)
 
+big_data_opt2 <- big_data_focused %>%
+  filter(Pills_per_person > 70) %>%
+  select(-avg_use_male, -avg_use_female, -percent_non_white, -geometry) 
+big_data_opt2 <- big_data_opt2 %>%
+  inner_join(county_geodata_shifted, by=NULL, copy=FALSE) %>%
+  select(-GEOID, -estimate, -NAME, -variable, -moe)
 
+opt_lm <- lm(Pills_per_person ~ avg_expectancy+avg_unemployment+percent_white+avg_use+med_income, data=big_data_opt2)
+summary(opt_lm)
+
+ggplot(big_data_opt2, aes(x=avg_expectancy, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+ggplot(big_data_opt2, aes(x=avg_unemployment, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+ggplot(big_data_opt2, aes(x=avg_use, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+ggplot(big_data_opt2, aes(x=med_income, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(title="title", subtitle = "", caption = "Source: bls, etc?") +
+  geom_smooth(method=lm)
+
+big_data_opt2 %>%
+  ggplot(aes(fill = Pills_per_person, geometry=geometry)) +
+  geom_sf(lwd = 0) +
+  theme_map() +
+  labs(fill='PIlls per person',title="Pills per person by US county", subtitle = "", caption = "Source: ARCOS") +
+  theme(legend.position="right") +
+  scale_fill_viridis_c(option = "plasma",labels = comma)
+```
 
 
 

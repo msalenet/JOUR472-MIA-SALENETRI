@@ -1,0 +1,283 @@
+---
+title: "Opioid Crisis Analysis | Title Pending"
+author: "Mia Salenetri"
+date: "December 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidycensus)
+library(arcos)
+library(janitor)
+library(scales)
+library(ggrepel)
+library(ggthemes)
+library(dplyr)
+options(scipen = 0)
+library(ggplot2)
+library(ggalt)
+library(ggfortify)
+library(gapminder)
+library(readxl)
+library(reprex)
+library(corrr)
+```
+
+## Part 1: Loading and cleaning the data
+
+
+ARCOS and Census data are the foundations for this analysis.
+```{r RUCC and big data, results='hide', message=FALSE, warning=FALSE}
+ARCOSkey <- "uO4EK6I"
+census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
+ruralurbancodes2013 <- read_csv("ruralurbancodes2013.csv")
+arcos_county_totals <- summarized_county_annual(key = ARCOSkey) %>%
+  clean_names()%>%
+  group_by(countyfips) %>%
+  summarise(avg_pills_year = mean(dosage_unit))
+county_geodata_shifted <- get_acs(geography = "county",
+              variables = "B01001_001", geometry = TRUE, shift_geo = TRUE)%>%
+  mutate(countyfips = GEOID)
+```
+
+I use the USDA's classifications of rural and urban counties to study what the differences are between the types of counties based on size and proximity to an urban area.
+```{r, results='hide', message=FALSE}
+#Rural/Urban Categories
+rural_urban_working <- ruralurbancodes2013 %>%
+  mutate(countyfips = FIPS) %>%
+  select(-FIPS, -Description, -X7, -X8) %>%
+  inner_join(arcos_county_totals, by = NULL, copy = FALSE)%>%
+  mutate(Pills_per_person = avg_pills_year/ Population_2010 )
+
+rural_urban_condensed <- rural_urban_working %>%
+  group_by(RUCC_2013) %>%
+  summarise(avg_pills_year=sum(avg_pills_year),
+            Total_population=sum(Population_2010)) %>%
+  mutate(Pills_per_person = avg_pills_year/ Total_population) %>%
+  mutate_if(is.numeric, round, digits = 2) 
+
+rural_urban_condensed$color<-c("deeppink4","deeppink4","deeppink4","deepskyblue4","deepskyblue4","deepskyblue4","deepskyblue4","deeppink4","deeppink4")
+
+```
+I loaded in data on income, alcohol use, unemployment, race and life expectancy.
+```{r, results='hide', message=FALSE, warning=FALSE}
+#Median Household Income
+median_income_x <- get_acs(geography = "county",
+              variables = "B25099_001", geometry = TRUE, shift_geo = TRUE) %>%
+  select(-variable, -moe, -geometry) %>%
+  rename(countyfips = GEOID)
+
+#Heavy alcohol use
+alc_use_clean <- read_csv("health_data/ALC_USE_HEAVY_2005_2012.csv")
+alc_use_clean <- alc_use_clean %>%
+  inner_join(rural_urban_working, by = NULL, copy = FALSE) 
+alc_use_clean <- alc_use_clean %>%
+  select(-`Percent Change 2005-2012, Both Sexes`, -`Percent Change 2005-2012, Females`, -`Percent Change 2005-2012, Males`) %>%
+  mutate(avg_use_male = rowMeans(select(alc_use_clean, ends_with("Males")))) %>%
+  mutate(avg_use_female = rowMeans(select(alc_use_clean, ends_with("Females")))) %>%
+  mutate(avg_use = rowMeans(select(alc_use_clean, ends_with("Both Sexes")))) %>%
+  mutate(RUCC_2013 = as.character(RUCC_2013)) %>%
+  select(countyfips, avg_use_male, avg_use_female, avg_use)
+
+#Average life expectancy
+life_expectancy <- read_xlsx('health_data/LIFE_EXPECTANCY_2005_2014.xlsx') %>%
+  clean_names() %>%
+  separate(life_expectancy_2005, sep=" \\(", into=c("life_expectancy_2005", "2005_garbage") ) %>%
+  mutate(life_expectancy_2005 = as.numeric(life_expectancy_2005)) %>%
+  separate(life_expectancy_2010, sep=" \\(", into=c("life_expectancy_2010", "2010_garbage") ) %>%
+  mutate(life_expectancy_2010 = as.numeric(life_expectancy_2010)) %>%
+  separate(life_expectancy_2014, sep=" \\(", into=c("life_expectancy_2014", "2014_garbage") ) %>%
+  mutate(life_expectancy_2014 = as.numeric(life_expectancy_2014)) %>%
+  select(-'2005_garbage', -'2010_garbage', -'2014_garbage', -'percent_change_in_life_expectancy_1980_2014') %>%
+  mutate(fips = as.numeric(fips)) %>%
+  mutate(fips = case_when(fips < 10000 ~ paste0("0", fips ),
+                           TRUE ~ as.character(fips))
+         )
+life_expectancy <- life_expectancy %>%
+  rename(countyfips=fips) %>%
+  inner_join(county_geodata_shifted, by=NULL, copy=FALSE) %>%
+  mutate(avg_expectancy = rowMeans(select(life_expectancy, starts_with("life_")))) %>%
+  rename(med_income = estimate)%>%
+  select(-location, -GEOID, -variable)
+
+#Average unemployment rate
+unemployment06 <- read_xlsx("BLS_data/laucnty06.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2006_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips, -...6)
+unemployment07 <- read_xlsx("BLS_data/laucnty07.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2007_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+unemployment08 <- read_xlsx("BLS_data/laucnty08.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2008_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+unemployment09 <- read_xlsx("BLS_data/laucnty09.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2009_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+unemployment10 <- read_xlsx("BLS_data/laucnty10.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2010_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+unemployment11 <- read_xlsx("BLS_data/laucnty11.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2011_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+unemployment12 <- read_xlsx("BLS_data/laucnty12.xlsx") %>%
+  mutate(countyfips = paste0(state_fips,county_fips)) %>%
+  rename('2012_rate' = 'unemployment_rate') %>%
+  select(-LAUS, -state_fips, -county_fips)
+
+unemployment_all <- unemployment06 %>%
+  select(-year, -labor_force, -employed, -unemployed) 
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment07, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment08, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment09, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment10, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment11, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+unemployment_all <- unemployment_all %>%
+  full_join(unemployment12, by = NULL, copy = FALSE) %>%
+  select(-year, -labor_force, -employed, -unemployed)
+
+unemployment_all <- unemployment_all %>%
+  mutate(avg_unemployment = rowMeans(select(unemployment_all, ends_with("_rate"))))
+
+#Racial makeup—white or non white
+race_data <- read_csv('census_data/Race/race_data_with_overlays.csv')
+race_data <- race_data %>%
+  select(-B02001_001M, -B02001_002M, -B02001_003M, -B02001_004M, -B02001_005M, -B02001_006M, -B02001_007M, -B02001_008M, -B02001_009M, -B02001_010M)%>%
+  rename(total = B02001_001E) %>%
+  rename(white_alone = B02001_002E) %>%
+  rename(black_alone = B02001_003E)%>%
+  rename(native_alone = B02001_004E)%>%
+  rename(asian_alone = B02001_005E)%>%
+  rename(hawaiian_pacific_alone = B02001_006E)%>%
+  rename(other_alone = B02001_007E)%>%
+  rename(two_or_more = B02001_008E)%>%
+  rename(two_or_more_other = B02001_009E)%>%
+  rename(three_or_more = B02001_010E)
+race_data <- race_data[-c(1),]
+race_data <- race_data %>%
+  mutate(total = as.numeric(total))%>%
+  mutate(white_alone = as.numeric(white_alone))%>%
+  mutate(black_alone = as.numeric(black_alone))%>%
+  mutate(native_alone = as.numeric(native_alone))%>%
+  mutate(asian_alone = as.numeric(asian_alone))%>%
+  mutate(hawaiian_pacific_alone = as.numeric(hawaiian_pacific_alone))%>%
+  mutate(other_alone = as.numeric(other_alone))%>%
+  mutate(two_or_more = as.numeric(two_or_more))%>%
+  mutate(two_or_more_other = as.numeric(two_or_more_other))%>%
+  mutate(three_or_more = as.numeric(three_or_more))
+race_data <- race_data %>%
+  mutate(non_white = rowSums(race_data[,c("black_alone", "native_alone", "asian_alone", "hawaiian_pacific_alone", "other_alone", "two_or_more", "two_or_more_other", "three_or_more")]))
+race_data <- race_data %>%
+  mutate(percent_white = white_alone / total) %>%
+  mutate(percent_non_white = non_white / total) %>%
+  inner_join(median_income_x, by=NULL, copy=FALSE) %>%
+  select(-GEO_ID)
+```
+
+In order to make my analysis simpler, I added all my data into one data frame for easy comparisons.
+```{r, results='hide', message=FALSE}
+#all of the data!
+big_data <- rural_urban_working %>%
+  group_by(countyfips) %>%
+  mutate(RUCC_2013 = as.character(RUCC_2013)) %>%
+  full_join(life_expectancy, by=NULL, copy=FALSE) %>%
+  select(State, County_Name, Population_2010, RUCC_2013, countyfips, Pills_per_person, avg_expectancy, med_income) %>%
+  inner_join(unemployment_all, by='countyfips', copy=TRUE) %>%
+  select(State, County_Name, Population_2010, RUCC_2013, countyfips, Pills_per_person, avg_expectancy, avg_unemployment, med_income)%>%
+  inner_join(alc_use_clean, by=NULL, copy=FALSE)%>%
+  full_join(race_data, by=NULL, copy=FALSE) %>%
+  select(State, County_Name, Population_2010, RUCC_2013, countyfips, Pills_per_person, avg_expectancy, avg_unemployment, med_income, avg_use_male, avg_use_female, avg_use, percent_white, percent_non_white, geometry)
+```
+
+## Part 2: Contrary to popular belief, the opioid crisis might not be a rural problem.
+
+Although the opioid crisis is often thought of as a rural problem, the more remote counties were not as heavily hargeted with pill shipments as the more mid-range counties.
+
+The Census Bureau and the USDA split all the U.S. counties into nine categories, 1 being the most urban, 9 being the least. Here's a breakdown of their grouping system:
+
+1. Metro - Counties in metro areas of 1 million population or more 
+2. Metro - Counties in metro areas of 250,000 to 1 million population
+3. Metro - Counties in metro areas of fewer than 250,000 population
+4. **Nonmetro - Urban population of 20,000 or more, adjacent to a metro area**
+5. **Nonmetro - Urban population of 20,000 or more, not adjacent to a metro area**
+6. **Nonmetro - Urban population of 2,500 to 19,999, adjacent to a metro area**
+7. **Nonmetro - Urban population of 2,500 to 19,999, not adjacent to a metro area**
+8. Nonmetro - Completely rural or less than 2,500 urban population, adjacent to a metro area
+9. Nonmetro - Completely rural or less than 2,500 urban population, not adjacent to a metro area
+
+The counties categorized as 4, 5, 6 and 7, nonmetro areas with urban populations, had the most signifigant positive relationships with the rate of opioid pills per person.
+
+```{r, results='hide', message=FALSE}
+ggplot(rural_urban_condensed) +
+  geom_bar(stat="identity", aes(x=RUCC_2013, y=Pills_per_person, fill=color)) +
+  guides(fill=FALSE) +
+  geom_text(aes(x=RUCC_2013, y=Pills_per_person, label=Pills_per_person), vjust=1.6, color="white", size=4)+
+  labs(x="Urban/Rural Classification", y="Pills per person", title="Nonmetro areas with mid-range urban populations saw the most pills per person", subtitle = "Areas not adjacent to a metro area had higher rates than counties of a similar size", caption = "ARCOS & USDA") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_y_continuous(labels = comma)+
+  theme_classic()+
+  scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9))
+```
+
+The relationships between rural/urban classifications and pills per person were extremely signifigant, especially that of groups 5 and 7. Comparing the signifigance of groups with the same population size, it's clear that proximity to a metro area is a predictor of the prevalence of opioid pills received.
+```{r RUCC linear model, message=FALSE}
+first_lm <- lm(Pills_per_person ~ RUCC_2013, data=big_data)
+summary(first_lm)
+```
+
+
+
+## Part 3: Who was targetted?
+
+Second point: here are the groups who were targeted by this trend: 
+
+* Higher rates of unemployment 
+* Shorter Life Expectancy 
+* Areas with lower levels of heavy alcohol use AND all other factors (alcohol use is not a predictor when assessed alone)
+* Majorite white
+
+```{r linear model, message=FALSE}
+clean_lm <- lm(Pills_per_person ~ avg_expectancy+avg_unemployment+percent_white+avg_use+avg_use_male+avg_use_female, data=big_data)
+summary(clean_lm)
+```
+
+
+```{r life expectancy, results='hide', message=FALSE}
+
+big_data_focused <- big_data %>%
+  filter(str_detect(RUCC_2013, "4|5|6|7"))
+
+ggplot(big_data_focused, aes(x=avg_unemployment, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(x="Average unemployment rate", y="Pills per person", title="Areas with higher unemployment more likely to see influx of opioid pills", subtitle = "", caption = "ARCOS & Census", color="Urban/Rural Classification", shape="Urban/Rural Classification") +
+  geom_smooth(method=lm)
+
+ggplot(big_data_focused, aes(x=avg_expectancy, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(x="Average life expectancy from 2005 to 2014", y="Pills per person", title="Towns targeted by high opioid shipments already showed low life expectancy", subtitle = "", caption = "ARCOS & IHME", color="Urban/Rural Classification", shape="Urban/Rural Classification") +
+  geom_smooth(method=lm)
+
+ggplot(big_data_focused, aes(x=avg_use, y=Pills_per_person, shape=RUCC_2013, color=RUCC_2013)) + 
+  geom_point() +
+  labs(x="Heavy alcohol use", y="Pills per person", title="Areas with lower levels of heavy alcohol use had higher rates of pills shipped", subtitle = "", caption = "ARCOS & IHME", color="Urban/Rural Classification", shape="Urban/Rural Classification") +
+  geom_smooth(method=lm)
+```
+
+
